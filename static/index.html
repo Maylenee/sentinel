@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="id">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>SENTINEL – konteks video lalu bedah komentar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f3f5fc;
+            --panel: #fff;
+            --ink: #2a3150;
+            --mute: #7b84a3;
+            --line: #e7eaf5;
+            --pri: #4f63e6;
+            --pri-soft: #eceffe;
+            --hi: #e5484d;
+            --mid: #e5a00d;
+            --lo: #2fa37f;
+            --acc: #4f63e6;
+            --cv: #fafbff;
+            --hov: #f3f5fe;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px)
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font: 14px/1.6 Poppins, system-ui, sans-serif
+        }
+
+        /* ===== Layout: sidebar + konten ===== */
+        .app {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            min-height: 100vh
+        }
+
+        .content {
+            min-width: 0
+        }
+
+        .top {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--line)
+        }
+
+        .crumb {
+            color: var(--ink)
+        }
+
+        .crumb.cur {
+            background: var(--pri-soft);
+            color: var(--pri);
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-weight: 500
+        }
+
+        main {
+            padding: 24px 28px 40px;
+            display: grid;
+            gap: 20px;
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+            max-width: 1400px
+        }
+
+        section {
+            background: var(--panel);
+            border-radius: 10px;
+            padding: 0;
+            box-shadow: 0 1px 3px rgba(40, 55, 120, .06);
+            scroll-margin-top: 16px
+        }
+
+        section>.in {
+            padding: 20px 24px 24px
+        }
+
+        .full {
+            grid-column: 1/-1
+        }
+
+        h2 {
+            font-size: 17px;
+            font-weight: 600;
+            margin: 0;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--line)
+        }
+
+        h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 20px 0 8px
+        }
+
+        .lead {
+            color: var(--mute);
+            margin: 0 0 14px;
+            max-width: 90ch
+        }
+
+        input[type=text],
+        textarea {
+            font: inherit;
+            padding: 10px 14px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--ink);
+            width: 100%
+        }
+
+        input[type=text] {
+            width: min(640px, 100%)
+        }
+
+        textarea {
+            min-height: 96px;
+            resize: vertical
+        }
+
+        button {
+            font: inherit;
+            font-weight: 500;
+            background: var(--pri);
+            color: #fff;
+            border: 0;
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer
+        }
+
+        button:hover {
+            background: #4056d6
+        }
+
+        button:disabled {
+            opacity: .55;
+            cursor: wait
+        }
+
+        button.alt {
+            background: var(--pri)
+        }
+
+        button.ghost {
+            background: #fff;
+            color: var(--pri);
+            border: 1px solid var(--pri)
+        }
+
+        button.ghost:hover {
+            background: var(--pri-soft)
+        }
+
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        tr:focus-visible,
+
+        label {
+            white-space: nowrap
+        }
+
+        .bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+            align-items: center;
+            margin-top: 12px
+        }
+
+        .note {
+            color: var(--mute);
+            font-size: 13px;
+            margin: 6px 0
+        }
+
+        .err {
+            background: #fdecec;
+            border-left: 4px solid var(--hi);
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin: 10px 0 0;
+            font-size: 13px
+        }
+
+        .prog {
+            height: 6px;
+            background: var(--pri-soft);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 12px
+        }
+
+        .prog i {
+            display: block;
+            height: 100%;
+            background: var(--pri);
+            width: 0;
+            transition: width .3s
+        }
+
+        /* ===== Kartu statistik ===== */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin: 10px 0
+        }
+
+        .stats div {
+            background: var(--cv);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column-reverse
+        }
+
+        .stats b {
+            display: block;
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--pri)
+        }
+
+        .stats span {
+            color: var(--mute);
+            font-size: 12px
+        }
+
+        canvas {
+            width: 100%;
+            height: 340px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--cv);
+            display: block
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line)
+        }
+
+        th {
+            font-weight: 600;
+            background: var(--cv);
+            position: sticky;
+            top: 0
+        }
+
+        tbody tr {
+            cursor: pointer
+        }
+
+        tbody tr:hover,
+        tr.sel {
+            background: var(--hov)
+        }
+
+        .tw {
+            max-height: 300px;
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 8px
+        }
+
+        .pill {
+            padding: 2px 10px;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 12px;
+            white-space: nowrap
+        }
+
+        .tinggi {
+            background: var(--hi)
+        }
+
+        .sedang {
+            background: var(--mid)
+        }
+
+        .rendah {
+            background: var(--lo)
+        }
+
+        .tag {
+            display: inline-block;
+            font-size: 12px;
+            background: var(--pri-soft);
+            color: var(--pri);
+            border-radius: 10px;
+            padding: 1px 10px;
+            margin: 0 6px 4px 0
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 1px 8px;
+            border-radius: 9px;
+            background: var(--pri-soft);
+            color: var(--pri);
+            margin-right: 5px
+        }
+
+        .cl {
+            border-left: 4px solid var(--pri);
+            background: var(--cv);
+            border-radius: 0 8px 8px 0;
+            padding: 10px 14px;
+            margin-bottom: 14px
+        }
+
+        .post {
+            margin: 6px 0;
+            padding: 8px 12px;
+            background: var(--cv);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            font-size: 13px;
+            overflow-wrap: anywhere
+        }
+
+        .preview {
+            display: grid;
+            grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+            gap: 24px;
+            align-items: start
+        }
+
+        .media {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+            background: #0b0f14;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column
+        }
+
+        .media iframe {
+            width: 100%;
+            height: 540px;
+            border: 0;
+            display: block;
+            background: #000
+        }
+
+        .media img {
+            width: 100%;
+            max-height: 540px;
+            object-fit: contain;
+            display: block;
+            background: #000
+        }
+
+        .media .fallback {
+            padding: 16px;
+            color: #dbe3ec;
+            font-size: 13px
+        }
+
+        .media .open {
+            display: block;
+            padding: 10px 12px;
+            background: #fff;
+            color: var(--pri);
+            text-decoration: none;
+            font-size: 13px;
+            border-top: 1px solid var(--line)
+        }
+
+        .pexp h3:first-child {
+            margin-top: 0
+        }
+
+        .claim {
+            border-left: 3px solid var(--pri);
+            padding: 8px 12px;
+            margin: 8px 0;
+            background: var(--cv);
+            border-radius: 0 8px 8px 0
+        }
+
+        details {
+            margin: 6px 0
+        }
+
+        summary {
+            cursor: pointer;
+            color: var(--pri);
+            font-weight: 500
+        }
+
+        .ev {
+            font-size: 13px;
+            color: var(--mute);
+            max-height: 260px;
+            overflow: auto;
+            padding: 8px 12px;
+            margin-top: 6px;
+            background: var(--cv);
+            border: 1px solid var(--line);
+            border-radius: 8px
+        }
+
+        .stance {
+            display: flex;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: var(--line);
+            margin: 8px 0
+        }
+
+        .stance i {
+            display: block;
+            height: 100%
+        }
+
+        .s-dukung {
+            background: var(--lo)
+        }
+
+        .s-tolak {
+            background: var(--hi)
+        }
+
+        .s-tanya {
+            background: var(--mid)
+        }
+
+        .s-netral {
+            background: #b4bbd3
+        }
+
+        .s-campur {
+            background: var(--pri)
+        }
+
+        .rb {
+            height: 8px;
+            background: var(--line);
+            border-radius: 4px;
+            margin: 2px 0 10px
+        }
+
+        .rb i {
+            display: block;
+            height: 100%;
+            background: var(--hi);
+            border-radius: 4px
+        }
+
+        a {
+            color: var(--pri)
+        }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px
+        }
+
+        @media(max-width:900px) {
+            .app {
+                grid-template-columns: 1fr
+            }
+
+            main {
+                grid-template-columns: 1fr;
+                padding: 16px
+            }
+
+            .top {
+                padding: 12px 16px
+            }
+
+            .preview,
+            .grid2 {
+                grid-template-columns: 1fr
+            }
+        }
+
+        .logo {
+            font-weight: 600;
+            font-size: 18px;
+            color: var(--pri);
+            letter-spacing: .5px;
+            margin-right: 14px
+        }
+
+        .stepwrap {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: var(--panel);
+            border-bottom: 1px solid var(--line);
+            padding: 14px 28px
+        }
+
+        .steps {
+            list-style: none;
+            margin: 0 auto;
+            padding: 0;
+            display: flex;
+            max-width: 1344px
+        }
+
+        .steps li {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: relative;
+            cursor: pointer;
+            color: var(--mute);
+            min-width: 0
+        }
+
+        .steps li:not(:last-child)::after {
+            content: "";
+            flex: 1;
+            height: 2px;
+            background: var(--line);
+            margin: 0 14px;
+            border-radius: 1px
+        }
+
+        .steps li.done:not(:last-child)::after {
+            background: var(--pri)
+        }
+
+        .steps i {
+            flex: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-style: normal;
+            font-weight: 600;
+            font-size: 13px;
+            background: var(--bg);
+            border: 2px solid var(--line);
+            color: var(--mute)
+        }
+
+        .steps li.done i {
+            background: var(--pri);
+            border-color: var(--pri);
+            color: #fff
+        }
+
+        .steps li.on i {
+            background: #fff;
+            border-color: var(--pri);
+            color: var(--pri)
+        }
+
+        .steps li.busy i {
+            animation: pulse 1.3s infinite
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(79, 99, 230, .45)
+            }
+
+            100% {
+                box-shadow: 0 0 0 10px rgba(79, 99, 230, 0)
+            }
+        }
+
+        .steps b {
+            display: block;
+            font-weight: 500;
+            font-size: 13px;
+            line-height: 1.3;
+            white-space: nowrap
+        }
+
+        .steps small {
+            display: block;
+            font-size: 11px;
+            color: var(--mute)
+        }
+
+        .steps li.on b,
+        .steps li.done b {
+            color: var(--ink)
+        }
+
+        @media(prefers-reduced-motion:reduce) {
+            .steps li.busy i {
+                animation: none
+            }
+        }
+
+        @media(max-width:900px) {
+            .stepwrap {
+                padding: 10px 12px
+            }
+
+            .steps small,
+            .steps b {
+                display: none
+            }
+
+            .steps li.on b {
+                display: block
+            }
+
+            .steps li:not(:last-child)::after {
+                margin: 0 8px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+
+        <div class="content">
+            <div class="top"><b class="logo">SENTINEL</b></div>
+            <div class="stepwrap">
+                <ol class="steps" id="steps">
+                    <li data-t="s1"><i>1</i><span><b>Ambil konteks</b><small>Tempel tautan</small></span></li>
+                    <li data-t="ctxsec"><i>2</i><span><b>Periksa konteks</b><small>Cek ringkasan</small></span></li>
+                    <li data-t="csec"><i>3</i><span><b>Bedah komentar</b><small>Petakan klaim</small></span></li>
+                    <li data-t="netsec"><i>4</i><span><b>Hasil</b><small>Jaringan &amp; clique</small></span></li>
+                </ol>
+            </div>
+            <main>
+                <section class="full" id="s1">
+                    <h2>Ambil konteks video</h2>
+                    <div class="in">
+                        <p class="lead">Tempel tautan postingan publik. SENTINEL membangun konteks video lebih dulu
+                            (caption, transkrip audio, teks layar), lalu memetakan komentar terhadap klaim video. Hasil
+                            berupa indikasi untuk ditinjau analis, bukan vonis.</p>
+                        <input type="text" id="purl" placeholder="Tempel tautan publik TikTok / Instagram / Facebook"
+                            aria-label="Tautan postingan publik"> <button id="pgo">Ambil konteks</button>
+                        <div class="bar"><label><input type="checkbox" id="pmedia" checked> Unduh media sementara untuk
+                                ASR + OCR (1–2 menit)</label></div>
+                        <p class="note">Hanya konten publik. Media dihapus setelah diproses. Tanpa ffmpeg/ASR/OCR,
+                            konteks memakai caption saja.</p>
+                        <span class="note" id="pst"></span>
+                        <div class="prog" id="pbar" hidden><i id="pfill"></i></div>
+                        <div id="errs"></div>
+                    </div>
+                </section>
+
+                <section class="full" id="ctxsec" hidden>
+                    <h2>Konteks video</h2>
+                    <div class="in">
+                        <p class="note" style="margin-top:0">Periksa dan edit ringkasan sebelum membedah komentar.</p>
+                        <div class="preview">
+                            <div class="media" id="cmedia"></div>
+                            <div class="pexp">
+                                <p id="csum"></p>
+                                <div class="stats" id="cstats"></div>
+                                <p class="note" id="cnote"></p>
+                                <h3>Klaim utama</h3>
+                                <div id="cclaims"></div>
+                                <h3>Ringkasan (bisa diedit)</h3><textarea id="cedit"
+                                    aria-label="Ringkasan konteks yang dapat diedit"></textarea>
+                                <h3>Bukti konteks</h3>
+                                <details>
+                                    <summary>Transkrip audio</summary>
+                                    <div class="ev" id="ctrans"></div>
+                                </details>
+                                <details>
+                                    <summary>Teks layar (OCR)</summary>
+                                    <div class="ev" id="cocr"></div>
+                                </details>
+                                <details>
+                                    <summary>Caption / deskripsi</summary>
+                                    <div class="ev" id="ccap"></div>
+                                </details>
+                                <p><button id="canalyze" class="alt">Konfirmasi &amp; bedah komentar</button> <span
+                                        class="note" id="cstatus"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="full" id="statsec" hidden>
+                    <div class="in">
+                        <div class="stats" id="stats"></div>
+                        <p class="note" id="src"></p>
+                    </div>
+                </section>
+
+                <section class="full" id="csec" hidden>
+                    <h2>Bedah komentar</h2>
+                    <div class="in">
+                        <p id="csum2" style="margin-top:0"></p>
+                        <div class="stats" id="cstats2"></div>
+                        <h3>Sikap komentar</h3>
+                        <div class="stance" id="cstance"></div>
+                        <p class="note" id="cstancenote"></p>
+                        <h3>Klaim yang diamplifikasi</h3>
+                        <div id="cclaimsamp"></div>
+                        <h3>Indikator persuasi</h3>
+                        <div id="cflags"></div>
+                        <p class="note" id="cwhy"></p>
+                        <div class="grid2">
+                            <div>
+                                <h3>Cuplikan postingan</h3>
+                                <div class="post" id="cpost"></div>
+                            </div>
+                            <div>
+                                <h3>Kata yang sering muncul</h3>
+                                <div id="cterms"></div>
+                            </div>
+                        </div>
+                        <h3>Contoh komentar</h3>
+                        <div id="ccom"></div>
+                        <h3>Nada kata</h3>
+                        <p class="note" id="csent"></p>
+                        <p class="note" id="cnotes"></p>
+                        <p><button id="cdossier" class="ghost">Unduh dossier bukti (JSON)</button></p>
+                    </div>
+                </section>
+
+                <section id="netsec">
+                    <h2>Jaringan akun terkoordinasi</h2>
+                    <div class="in">
+                        <canvas id="g" aria-label="Graf jaringan akun"></canvas>
+                        <p class="note">Titik = akun. Garis = teks mirip dalam jendela waktu pendek dan lolos uji
+                            clique. Klik titik untuk melihat alasannya.</p>
+                    </div>
+                </section>
+                <section>
+                    <h2>Akun berdasarkan risiko</h2>
+                    <div class="in">
+                        <div class="tw">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Akun</th>
+                                        <th>Risiko</th>
+                                        <th>Tingkat</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rows"></tbody>
+                            </table>
+                        </div>
+                        <h3>Alasan penilaian</h3>
+                        <div id="detail" class="note">Pilih satu akun dari tabel atau graf.</div>
+                    </div>
+                </section>
+                <section class="full" id="clsec">
+                    <h2>Clique akun yang bergerak serempak</h2>
+                    <div class="in" id="cl">
+                        <p class="note">Belum ada analisis komentar.</p>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script>
+        const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), COL = l => cssv({ tinggi: '--hi', sedang: '--mid', rendah: '--lo' }[l]);
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        let jobId = null, ctx = null, post = null, res = null, sel = null, pos = new Map();
+        async function api(path, opt) { const r = await fetch(path, opt); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || ('status ' + r.status)); return d }
+        const pill = a => '<span class="pill ' + a.level + '">' + Math.round(a.risk * 100) + '% ' + a.level + '</span>';
+        const fmtDur = s => { if (s == null) return '?'; s = Math.round(Number(s)); return Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's' };
+        const pct = x => Math.round((Number(x) || 0) * 100) + '%';
+        function setStep(n, busy) { document.querySelectorAll('#steps li').forEach((li, i) => { li.className = i + 1 < n ? 'done' : i + 1 === n ? 'on' + (busy ? ' busy' : '') : ''; li.querySelector('i').textContent = i + 1 < n ? '✓' : i + 1 }) }
+        document.querySelectorAll('#steps li').forEach(li => li.addEventListener('click', () => { const t = document.getElementById(li.dataset.t); if (t && !t.hidden) t.scrollIntoView({ behavior: 'smooth', block: 'start' }) }));
+        setStep(1);
+        const cards = rows => rows.map(([l, v]) => '<div><b>' + v + '</b><span>' + l + '</span></div>').join('');
+        function setProgress(p, m) { const bar = $('#pbar'), fill = $('#pfill'); if (p == null) { bar.hidden = true; return } bar.hidden = false; fill.style.width = Math.max(0, Math.min(100, Number(p) || 0)) + '%'; if (m) $('#pst').textContent = m }
+        function media() {
+            const p = post || {}, pv = previewOf(p), box = $('#cmedia'); let h = '';
+            if (pv.embed_url) { h = '<iframe src="' + esc(pv.embed_url) + '" loading="lazy" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen title="Pratinjau ' + esc(p.platform || 'postingan') + '"></iframe>' }
+            else if (pv.thumbnail) { h = '<a href="' + esc(p.url) + '" target="_blank" rel="noopener"><img src="' + esc(pv.thumbnail) + '" alt="Pratinjau postingan" referrerpolicy="no-referrer"></a>' }
+            else { h = '<div class="fallback">Pratinjau media tidak tersedia dari platform ini.</div>' }
+            if (p.url) h += '<a class="open" href="' + esc(p.url) + '" target="_blank" rel="noopener">Buka postingan di ' + esc(p.platform || 'platform') + ' ↗</a>';
+            box.innerHTML = h
+        }
+        function previewOf(p) {
+            const pv = Object.assign({}, (p || {}).preview || {}); if (!pv.embed_url && p && p.url) {
+                let m;
+                if (p.platform === 'TikTok' && (m = p.url.match(/\/video\/(\d+)/))) pv.embed_url = 'https://www.tiktok.com/embed/v2/' + m[1];
+                else if (p.platform === 'Instagram' && (m = p.url.match(/\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/))) pv.embed_url = 'https://www.instagram.com/p/' + m[1] + '/embed/';
+                else if (p.platform === 'Facebook') pv.embed_url = 'https://www.facebook.com/plugins/post.php?href=' + encodeURIComponent(p.url) + '&show_text=false&width=500'
+            }
+            return pv
+        }
+        function claimHtml(c) { return '<div class="claim"><span class="badge">' + esc(c.kind || 'klaim') + '</span>' + (c.verifiable ? '<span class="badge">bisa diverifikasi</span>' : '') + '<span class="badge">' + esc(c.source || '') + '</span><br>' + esc(c.text || '') + '</div>' }
+        function renderContext(j) {
+            ctx = j.context || {}; post = j.post || post || {}; jobId = j.id || jobId;
+            $('#ctxsec').hidden = false; $('#statsec').hidden = true; $('#csec').hidden = true; setStep(2);
+            $('#csum').textContent = ctx.summary || 'Tidak ada ringkasan.';
+            $('#cstats').innerHTML = cards([['Durasi', fmtDur(ctx.duration)], ['Keyakinan konteks', pct(ctx.confidence)], ['Transkrip', ctx.video && ctx.video.transcript ? 'Ada' : 'Tidak'], ['OCR', ctx.video && ctx.video.ocr ? 'Ada' : 'Tidak'], ['Komentar diambil', j.items_count == null ? '?' : j.items_count]]);
+            $('#cnote').textContent = (j.cached ? 'Konteks dari cache. ' : '') + (ctx.data_notes || '');
+            $('#cclaims').innerHTML = (ctx.claims || []).length ? ctx.claims.map(claimHtml).join('') : '<p class="note">Tidak ada klaim eksplisit yang terdeteksi. Ringkasan tetap bisa dipakai.</p>';
+            $('#cedit').value = ctx.summary || '';
+            const ev = ctx.evidence || {};
+            $('#ctrans').innerHTML = (ev.transcript || []).length ? ev.transcript.map(s => '<div>[' + s.start + '–' + s.end + 's] ' + esc(s.text) + '</div>').join('') : '<p class="note">Transkrip tidak tersedia.</p>';
+            $('#cocr').innerHTML = (ev.ocr || []).length ? ev.ocr.map(x => '<div>' + (x.t == null ? '' : '[' + x.t + 's] ') + esc(x.text) + '</div>').join('') : '<p class="note">Teks layar tidak tersedia.</p>';
+            $('#ccap').textContent = ev.caption || 'Tidak ada caption.';
+            media(); $('#ctxsec').scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        async function getContext() {
+            const url = $('#purl').value.trim(); if (!/^https?:\/\//i.test(url)) { $('#pst').textContent = 'Tempel tautan lengkap (https://…)'; return }
+            $('#pgo').disabled = true; $('#errs').innerHTML = ''; $('#ctxsec').hidden = true; $('#statsec').hidden = true; $('#csec').hidden = true; setProgress(0, 'Mengirim permintaan…'); setStep(1, true);
+            try {
+                const d = await api('/api/context', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, media: $('#pmedia').checked }) }); jobId = d.job_id;
+                const t0 = Date.now();
+                while (Date.now() - t0 < 360000) {
+                    await sleep(1200); const j = await api('/api/job/' + jobId); setProgress(j.progress, j.message || '');
+                    if (j.status === 'error') throw new Error(j.error || 'Job gagal');
+                    if (j.status === 'done') { setProgress(100, 'Konteks siap'); renderContext(j); return }
+                }
+                throw new Error('Waktu habis. Coba kecilkan PUBLIC_MAX_COMMENTS atau matikan ASR/OCR.')
+            } catch (e) { $('#errs').innerHTML = '<div class="err">Gagal: ' + esc(e.message === 'Failed to fetch' ? 'Server tidak merespons. Pastikan <b>python start.py</b> masih berjalan.' : e.message) + '</div>'; setProgress(null); setStep(1) }
+            finally { $('#pgo').disabled = false }
+        }
+        async function analyzeComments() {
+            if (!jobId || !ctx) { return }
+            $('#canalyze').disabled = true; setStep(3, true); $('#cstatus').textContent = 'Menganalisis komentar…'; $('#errs').innerHTML = '';
+            try {
+                const edited = $('#cedit').value.trim(); const use = Object.assign({}, ctx, { summary: edited || ctx.summary });
+                const d = await api('/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ job_id: jobId, context: use, win: 1440, cluster_span: 360 }) });
+                res = d; ctx = d.context || use; post = d.post || post; sel = null; renderAnalysis(); $('#cstatus').textContent = 'Selesai ' + new Date().toLocaleTimeString('id-ID')
+            } catch (e) { $('#errs').innerHTML = '<div class="err">Gagal analisis: ' + esc(e.message) + '</div>'; $('#cstatus').textContent = ''; setStep(2) }
+            finally { $('#canalyze').disabled = false }
+        }
+        function renderAnalysis() {
+            const s = res.stats || {}, c = res.content || {}; setStep(5);
+            $('#statsec').hidden = false; $('#csec').hidden = false;
+            $('#stats').innerHTML = cards([['Postingan/item', s.posts], ['Akun', s.accounts], ['Clique', s.clusters], ['Risiko tinggi', s.high], ['Risiko sedang', s.mid], ['p koordinasi', s.coord_p == null ? '–' : s.coord_p]]);
+            $('#src').textContent = (res.post ? ('Postingan ' + res.post.platform + ' oleh ' + res.post.author + ' (' + res.post.comments + ' komentar)' + (res.post.note ? ' — ' + res.post.note : '')) : '') + ' | Sumber: ' + (Object.entries(res.sources || {}).map(([k, v]) => k + ' ' + v).join(', ') || '–');
+            $('#csum2').textContent = c.summary || '';
+            $('#cstats2').innerHTML = cards([['Komentar teks', c.text_comments], ['Akun komentator', c.unique_commenters], ['Komentar mirip', c.duplicate_pct + '%'], ['Rentang waktu', String(c.time_span_hours).replace('.', ',') + ' jam'], ['Dukung', (c.stance || {}).dukung || 0], ['Tolak', (c.stance || {}).tolak || 0]]);
+            const st = c.stance || {}, total = Math.max(1, Object.values(st).reduce((a, b) => a + (Number(b) || 0), 0));
+            $('#cstance').innerHTML = ['dukung', 'tolak', 'tanya', 'netral', 'campur'].map(k => '<i class="s-' + k + '" style="width:' + ((Number(st[k]) || 0) / total * 100) + '%" title="' + k + ': ' + (st[k] || 0) + '"></i>').join('');
+            $('#cstancenote').textContent = 'Dominan: ' + (c.dominant_stance || '–') + '; polarisasi ' + (c.polarization_pct || 0) + '% di antara yang bersikap. Keyakinan label ' + (c.narrative_confidence || 0) + '. ' + (c.narrative_note || '');
+            $('#cclaimsamp').innerHTML = (c.claim_amplification || []).length ? c.claim_amplification.map(x => '<div class="claim"><b>' + esc(x.claim) + '</b><div class="note">' + x.comments + ' komentar dari ' + x.unique_commenters + ' akun (' + x.share_pct + '% dari total) · ' + esc(x.kind) + ' · ' + esc(x.source) + '</div>' + (x.samples || []).map(q => '<div class="post"><b>' + esc(q.handle) + '</b>: ' + esc(q.text) + '</div>').join('') + '</div>').join('') : '<p class="note">Belum ada komentar yang terpetakan ke klaim.</p>';
+            $('#cflags').innerHTML = (c.manipulation_flags || []).length ? c.manipulation_flags.map(f => '<span class="tag">' + esc(f.name) + ': ' + esc((f.hits || []).join(', ')) + '</span>').join('') : '<span class="note">Tidak ada indikator leksikal yang menonjol.</span>';
+            $('#cwhy').textContent = c.why_low || '';
+            $('#cpost').innerHTML = c.post_text ? esc(c.post_text) : '<span class="note">Tidak ada teks caption.</span>';
+            $('#ccom').innerHTML = (c.samples || []).length ? c.samples.map(x => '<div class="post"><b>' + esc(x.handle) + '</b>: ' + esc(x.text) + (x.url ? ' <a href="' + esc(x.url) + '" target="_blank" rel="noopener">buka</a>' : '') + '</div>').join('') : '<span class="note">Tidak ada komentar teks untuk dipratinjau.</span>';
+            $('#cterms').innerHTML = (c.top_terms || []).length ? c.top_terms.map(t => '<span class="tag">' + esc(t.term) + ' ×' + t.count + '</span>').join('') : '<span class="note">Tidak ada teks yang bisa diringkas.</span>';
+            $('#csent').textContent = (c.sentiment && c.sentiment.total_words) ? ('Dari ' + c.sentiment.total_words + ' kata: ' + c.sentiment.positive_words + ' positif dan ' + c.sentiment.negative_words + ' negatif. Ini hitungan kata sederhana, bukan kesimpulan sikap.') : 'Tidak ada kata untuk dihitung.';
+            $('#cnotes').textContent = c.data_notes || '';
+            $('#cdossier').onclick = () => { const blob = new Blob([JSON.stringify(res.dossier || {}, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sentinel-dossier.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000) };
+            $('#rows').innerHTML = (res.accounts || []).map(a => '<tr tabindex="0" data-id="' + esc(a.id) + '" class="' + (a.id === sel ? 'sel' : '') + '"><td><span class="tag">' + esc(a.platform) + '</span>' + esc(a.handle) + '</td><td>' + Math.round(a.risk * 100) + '%</td><td><span class="pill ' + a.level + '">' + a.level + '</span></td></tr>').join('') || '<tr><td colspan="3" class="note">Tidak ada akun.</td></tr>';
+            $('#cl').innerHTML = (res.clusters || []).length ? res.clusters.map(c => '<div class="cl"><b>' + c.size + ' akun</b> (rata-rata risiko ' + Math.round(c.avg_risk * 100) + '%)<div class="note">Rentang ' + c.span_min + ' menit · ' + c.edges + ' edge · p=' + c.p_value + '</div><div class="note">' + c.members.map(esc).join(', ') + '</div>' + c.samples.map(p => '<div class="post"><span class="tag">' + esc(p.platform) + '</span><b>' + esc(p.who) + '</b>' + (p.reply ? ' (balasan)' : '') + ': ' + esc(p.text) + (p.url ? ' <a href="' + esc(p.url) + '" target="_blank" rel="noopener">buka</a>' : '') + '</div>').join('') + '</div>').join('') : '<p class="note">Tidak ada clique terkoordinasi terdeteksi pada data ini.</p>';
+            graph(); detail()
+        }
+        function detail() {
+            const a = res && res.accounts.find(x => x.id === sel); if (!a) return;
+            const b = a.breakdown || a.reasons || [];
+            $('#detail').innerHTML = '<p><b>' + esc(a.handle) + '</b> (' + esc(a.platform) + ') ' + pill(a) + '<br><span class="note">' + a.n_posts + ' item' + (a.profile_known ? ', usia akun ' + Math.round(a.ageDays) + ' hari, ' + a.followers + ' pengikut' : ', data profil tidak tersedia dari sumber ini') + '</span></p>' +
+                '<p class="note">Skor ' + (a.score == null ? 0 : a.score) + ' poin; ambang ' + (a.threshold == null ? 2.5 : a.threshold) + '. Persentase dihitung dari selisih poin terhadap ambang, jadi skor rendah berarti belum ada cukup sinyal.</p>' +
+                '<p>' + esc(a.explain || 'Tidak ada penjelasan.') + '</p>' +
+                (b.length ? b.map(r => '<div style="' + (r.hit ? '' : 'opacity:.55') + '">' + esc(r.label) + ' — <b>' + r.pts + ' poin</b>' + (r.hit ? '' : ' (tidak aktif)') + '</div><div class="rb"><i style="width:' + Math.min(100, r.pts / 3 * 100) + '%;' + (r.hit ? '' : 'background:var(--mute)') + '"></i></div>').join('') : '<p>Tidak ada sinyal yang menonjol.</p>')
+        }
+        function graph() {
+            const cv = $('#g'), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; const c = cv.getContext('2d'); c.scale(dpr, dpr); c.clearRect(0, 0, W, H); pos = new Map();
+            if (!res) return; const byC = new Map(); res.accounts.forEach(a => { if (a.cluster !== null) { if (!byC.has(a.cluster)) byC.set(a.cluster, []); byC.get(a.cluster).push(a.id) } });
+            const k = byC.size, R = Math.min(W, H) * .28; let i = 0;
+            for (const ids of byC.values()) { const ang = i++ / Math.max(k, 1) * Math.PI * 2 - Math.PI / 2, cx = W / 2 + (k > 1 ? Math.cos(ang) * R : 0), cy = H * .42 + (k > 1 ? Math.sin(ang) * R : 0); ids.forEach((m, j) => { const a2 = j / ids.length * Math.PI * 2, rr = 14 + ids.length * 3; pos.set(m, [cx + Math.cos(a2) * rr, cy + Math.sin(a2) * rr]) }) }
+            const rest = res.accounts.filter(a => !pos.has(a.id)), cols = Math.max(1, Math.floor((W - 20) / 14)); rest.forEach((a, n) => pos.set(a.id, [14 + (n % cols) * 14, H - 16 - Math.floor(n / cols) * 14]));
+            res.edges.forEach(e => { const p = pos.get(e.a), q = pos.get(e.b); if (!p || !q) return; c.strokeStyle = 'rgba(79,99,230,' + Math.min(.6, .15 + e.w * .05) + ')'; c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke() });
+            res.accounts.forEach(a => { const p = pos.get(a.id); if (!p) return; c.fillStyle = COL(a.level); c.beginPath(); c.arc(p[0], p[1], a.id === sel ? 8 : 5, 0, 7); c.fill(); if (a.id === sel) { c.strokeStyle = getComputedStyle(document.body).color; c.lineWidth = 2; c.stroke(); c.lineWidth = 1 } })
+        }
+        function pick(id) { sel = id; renderAnalysis() }
+        $('#rows').addEventListener('click', e => { const t = e.target.closest('tr'); if (t && t.dataset.id) pick(t.dataset.id) });
+        $('#rows').addEventListener('keydown', e => { if (e.key === 'Enter') { const t = e.target.closest('tr'); if (t && t.dataset.id) pick(t.dataset.id) } });
+        $('#g').addEventListener('click', e => { if (!res) return; const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; let b = null, d = 100; for (const [id, [px, py]] of pos) { const dd = (px - x) ** 2 + (py - y) ** 2; if (dd < d) { d = dd; b = id } } if (b) pick(b) });
+        $('#pgo').onclick = getContext; $('#canalyze').onclick = analyzeComments; $('#purl').addEventListener('keydown', e => { if (e.key === 'Enter') getContext() });
+        addEventListener('resize', () => res && graph());
+        if (location.protocol === 'file:') { $('#errs').innerHTML = '<div class="err">Halaman dibuka sebagai file. Jalankan <b>python start.py</b>, lalu buka http://127.0.0.1:8787.</div>' }
+    </script>
+</body>
+
+</html>

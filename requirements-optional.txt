@@ -1,0 +1,23 @@
+# Opsional: analisis postingan publik Facebook/Instagram/TikTok.
+# Semua open-source dan tanpa API key. Patuhi ToS platform dan UU PDP.
+# Pasang: pip install -r requirements-optional.txt
+yt-dlp>=2024.5.27
+# curl_cffi dipakai yt-dlp untuk impersonasi browser (tantangan TikTok) dan
+# untuk mengambil komentar TikTok.
+curl_cffi>=0.7
+instaloader>=4.15
+facebook-scraper>=0.2.59
+# lxml 5+ memisahkan html.clean; dibutuhkan requests-html (dipakai facebook-scraper).
+lxml_html_clean>=0.1
+# ASR lokal + ffmpeg tanpa instal sistem (model Whisper diunduh saat pertama dipakai).
+faster-whisper>=1.0
+# PyAV 19 menghapus argumen metadata_errors yang masih dipakai faster-whisper.
+# 16.1.0 sudah diuji di Windows/Python 3.13.
+av==16.1.0
+imageio-ffmpeg>=0.5
+# OCR teks layar. RapidOCR dipakai sebagai fallback lokal tanpa binary eksternal;
+# pytesseract + Tesseract tetap didukung bila tersedia.
+rapidocr>=3.0
+onnxruntime>=1.20
+pytesseract>=0.3.10
+Pillow>=10
