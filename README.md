@@ -1,6 +1,6 @@
 # SENTINEL (Python)
 
-Analisis postingan **publik** Facebook, Instagram, dan TikTok dengan alur **konteks video dulu, baru bedah komentar**. Backend FastAPI, dashboard web satu halaman.
+Analisis postingan **publik** Facebook, Instagram, dan TikTok dengan alur **konteks video dulu, baru bedah komentar**.
 
 ## Jalankan (satu perintah)
 Butuh Python 3.9 atau lebih baru.
@@ -61,7 +61,7 @@ tests/        uji regresi dan integrasi
 ## Uji
 `python tests/test_public.py` menguji deteksi platform, normalisasi, konteks caption, stance, clique vs rantai transitif, dan integrasi engine. Atau `python start.py --test`.
 
-## Catatan jujur
+## Catatan
 - Ini **bukan** API resmi dan bukan pencarian kata kunci; hanya analisis satu postingan publik lewat tautan.
 - Ringkasan ekstraktif tidak memahami ironi/konteks visual. ASR/OCR bisa salah; selalu periksa bukti timestamp.
 - Label sikap memakai leksikon, belum dilatih pada data berlabel. Sarkasme bisa salah.
