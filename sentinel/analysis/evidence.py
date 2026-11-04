@@ -29,6 +29,7 @@ def build(url, meta, context, analysis):
             'evidence': context.get('evidence') or {},
             'flags': context.get('flags') or [],
         },
+        'llm_review': analysis.get('llm') or {},
         'comment_signals': {
             'total_comments': content.get('text_comments', 0),
             'unique_commenters': content.get('unique_commenters', 0),
@@ -42,6 +43,7 @@ def build(url, meta, context, analysis):
                 'Komentar diambil dari sampel yang tersedia (maksimal sesuai PUBLIC_MAX_COMMENTS).',
                 'Label sikap memakai leksikon; sarkasme dan konteks rumit bisa salah.',
                 'ASR/OCR bisa salah; ringkasan bersifat ekstraktif dari teks yang terbaca.',
+                'Penilaian LLM bersifat probabilistik dan bisa keliru; bukan tuduhan atau bukti pembayaran.',
                 'Tidak ada bukti pembayaran/intent dari data publik; ini indikasi untuk ditinjau manusia.',
             ],
         },

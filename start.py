@@ -70,7 +70,7 @@ def prepare_env():
 
 
 def run_tests(py):
-    for name in ('tests/test_public.py',):
+    for name in ('tests/test_public.py', 'tests/test_llm.py'):
         print(f'Menjalankan {name} ...')
         if subprocess.call([py, str(ROOT / name)], cwd=str(ROOT)) != 0:
             raise SystemExit(f'Uji gagal: {name}; start dibatalkan.')

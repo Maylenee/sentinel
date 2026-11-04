@@ -408,6 +408,48 @@
             border-radius: 0 8px 8px 0
         }
 
+        .llm {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin: 8px 0;
+            background: var(--cv)
+        }
+
+        .llm .lb {
+            display: inline-block;
+            padding: 1px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: .2px
+        }
+
+        .lb.buzzer {
+            background: #fde8e8;
+            color: #b42318
+        }
+
+        .lb.bot {
+            background: #fef0e6;
+            color: #b54708
+        }
+
+        .lb.organic {
+            background: #e6f4ea;
+            color: #1e7b45
+        }
+
+        .lb.tidak_jelas {
+            background: var(--line);
+            color: var(--mute)
+        }
+
+        .llm .mark {
+            color: var(--mute);
+            font-size: 12px
+        }
+
         details {
             margin: 6px 0
         }
@@ -725,6 +767,11 @@
                         <h3>Sikap komentar</h3>
                         <div class="stance" id="cstance"></div>
                         <p class="note" id="cstancenote"></p>
+                        <h3>Analisis lanjutan (LLM)</h3>
+                        <p class="note" style="margin-top:0">Arti label: <b>buzzer</b> = indikasi amplifikasi narasi
+                            terkoordinasi; <b>bot</b> = indikasi otomasi; <b>organik</b> = perilaku wajar;
+                            <b>tidak jelas</b> = data atau sinyal belum cukup untuk menilai.</p>
+                        <div id="cllm"><p class="note">Belum ada analisis LLM.</p></div>
                         <h3>Klaim yang diamplifikasi</h3>
                         <div id="cclaimsamp"></div>
                         <h3>Indikator persuasi</h3>
@@ -767,6 +814,7 @@
                                         <th>Akun</th>
                                         <th>Risiko</th>
                                         <th>Tingkat</th>
+                                        <th>LLM</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rows"></tbody>
@@ -817,6 +865,19 @@
             return pv
         }
         function claimHtml(c) { return '<div class="claim"><span class="badge">' + esc(c.kind || 'klaim') + '</span>' + (c.verifiable ? '<span class="badge">bisa diverifikasi</span>' : '') + '<span class="badge">' + esc(c.source || '') + '</span><br>' + esc(c.text || '') + '</div>' }
+        const LLM_LABEL = { buzzer: 'buzzer', bot: 'bot', organic: 'organik', tidak_jelas: 'tidak jelas' };
+        const LLM_DESC = { buzzer: 'Indikasi amplifikasi narasi terkoordinasi', bot: 'Indikasi perilaku otomasi', organic: 'Perilaku wajar / tidak ada sinyal menonjol', tidak_jelas: 'Data atau sinyal belum cukup untuk menilai' };
+        function llmEntry(id) { const l = res && res.llm; return l && (l.accounts || []).find(x => x.id === id) }
+        function llmBadge(x) { if (!x) return '<span class="note">–</span>'; return '<span class="lb ' + esc(x.label || 'tidak_jelas') + '" title="' + esc(LLM_DESC[x.label] || '') + ' · keyakinan ' + pct(x.confidence) + '">' + esc(LLM_LABEL[x.label] || x.label || 'tidak jelas') + '</span>' }
+        function renderLlm() {
+            const box = $('#cllm'), l = res && res.llm;
+            if (!l) { box.innerHTML = '<p class="note">Analisis LLM tidak tersedia.</p>'; return }
+            if (!l.available) { box.innerHTML = '<p class="note">' + esc(l.note || 'LLM belum dikonfigurasi.') + '</p>'; return }
+            if (l.error) { box.innerHTML = '<div class="err">LLM gagal: ' + esc(l.error) + (l.note ? ' — ' + esc(l.note) : '') + '</div>'; return }
+            const head = '<div class="llm"><p style="margin:0 0 6px"><span class="lb ' + esc(l.overall_label || 'tidak_jelas') + '">' + esc(LLM_LABEL[l.overall_label] || l.overall_label || 'tidak jelas') + '</span> <span class="mark">keseluruhan · keyakinan ' + pct(l.overall_confidence) + '</span></p><p style="margin:0">' + esc(l.summary || 'Tidak ada ringkasan.') + '</p>' + ((l.caveats || []).length ? '<p class="note" style="margin:8px 0 0">Catatan: ' + esc(l.caveats.join(' ')) + '</p>' : '') + '</div>';
+            const rows = (l.accounts || []).map(x => '<div class="llm"><b>' + esc(x.handle || x.id) + '</b> ' + llmBadge(x) + ' <span class="mark">keyakinan ' + pct(x.confidence) + '</span>' + ((x.reasons || []).length ? '<div class="note">' + esc(x.reasons.join(' • ')) + '</div>' : '') + ((x.evidence || []).length ? '<div class="note">Bukti: “' + esc(x.evidence.join('” “')) + '”</div>' : '') + '</div>').join('');
+            box.innerHTML = head + (rows || '<p class="note">LLM tidak mengembalikan penilaian akun.</p>');
+        }
         function renderContext(j) {
             ctx = j.context || {}; post = j.post || post || {}; jobId = j.id || jobId;
             $('#ctxsec').hidden = false; $('#statsec').hidden = true; $('#csec').hidden = true; setStep(2);
@@ -866,6 +927,7 @@
             const st = c.stance || {}, total = Math.max(1, Object.values(st).reduce((a, b) => a + (Number(b) || 0), 0));
             $('#cstance').innerHTML = ['dukung', 'tolak', 'tanya', 'netral', 'campur'].map(k => '<i class="s-' + k + '" style="width:' + ((Number(st[k]) || 0) / total * 100) + '%" title="' + k + ': ' + (st[k] || 0) + '"></i>').join('');
             $('#cstancenote').textContent = 'Dominan: ' + (c.dominant_stance || '–') + '; polarisasi ' + (c.polarization_pct || 0) + '% di antara yang bersikap. Keyakinan label ' + (c.narrative_confidence || 0) + '. ' + (c.narrative_note || '');
+            renderLlm();
             $('#cclaimsamp').innerHTML = (c.claim_amplification || []).length ? c.claim_amplification.map(x => '<div class="claim"><b>' + esc(x.claim) + '</b><div class="note">' + x.comments + ' komentar dari ' + x.unique_commenters + ' akun (' + x.share_pct + '% dari total) · ' + esc(x.kind) + ' · ' + esc(x.source) + '</div>' + (x.samples || []).map(q => '<div class="post"><b>' + esc(q.handle) + '</b>: ' + esc(q.text) + '</div>').join('') + '</div>').join('') : '<p class="note">Belum ada komentar yang terpetakan ke klaim.</p>';
             $('#cflags').innerHTML = (c.manipulation_flags || []).length ? c.manipulation_flags.map(f => '<span class="tag">' + esc(f.name) + ': ' + esc((f.hits || []).join(', ')) + '</span>').join('') : '<span class="note">Tidak ada indikator leksikal yang menonjol.</span>';
             $('#cwhy').textContent = c.why_low || '';
@@ -875,16 +937,17 @@
             $('#csent').textContent = (c.sentiment && c.sentiment.total_words) ? ('Dari ' + c.sentiment.total_words + ' kata: ' + c.sentiment.positive_words + ' positif dan ' + c.sentiment.negative_words + ' negatif. Ini hitungan kata sederhana, bukan kesimpulan sikap.') : 'Tidak ada kata untuk dihitung.';
             $('#cnotes').textContent = c.data_notes || '';
             $('#cdossier').onclick = () => { const blob = new Blob([JSON.stringify(res.dossier || {}, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sentinel-dossier.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000) };
-            $('#rows').innerHTML = (res.accounts || []).map(a => '<tr tabindex="0" data-id="' + esc(a.id) + '" class="' + (a.id === sel ? 'sel' : '') + '"><td><span class="tag">' + esc(a.platform) + '</span>' + esc(a.handle) + '</td><td>' + Math.round(a.risk * 100) + '%</td><td><span class="pill ' + a.level + '">' + a.level + '</span></td></tr>').join('') || '<tr><td colspan="3" class="note">Tidak ada akun.</td></tr>';
+            $('#rows').innerHTML = (res.accounts || []).map(a => '<tr tabindex="0" data-id="' + esc(a.id) + '" class="' + (a.id === sel ? 'sel' : '') + '"><td><span class="tag">' + esc(a.platform) + '</span>' + esc(a.handle) + '</td><td>' + Math.round(a.risk * 100) + '%</td><td><span class="pill ' + a.level + '">' + a.level + '</span></td><td>' + llmBadge(llmEntry(a.id)) + '</td></tr>').join('') || '<tr><td colspan="4" class="note">Tidak ada akun.</td></tr>';
             $('#cl').innerHTML = (res.clusters || []).length ? res.clusters.map(c => '<div class="cl"><b>' + c.size + ' akun</b> (rata-rata risiko ' + Math.round(c.avg_risk * 100) + '%)<div class="note">Rentang ' + c.span_min + ' menit · ' + c.edges + ' edge · p=' + c.p_value + '</div><div class="note">' + c.members.map(esc).join(', ') + '</div>' + c.samples.map(p => '<div class="post"><span class="tag">' + esc(p.platform) + '</span><b>' + esc(p.who) + '</b>' + (p.reply ? ' (balasan)' : '') + ': ' + esc(p.text) + (p.url ? ' <a href="' + esc(p.url) + '" target="_blank" rel="noopener">buka</a>' : '') + '</div>').join('') + '</div>').join('') : '<p class="note">Tidak ada clique terkoordinasi terdeteksi pada data ini.</p>';
             graph(); detail()
         }
         function detail() {
             const a = res && res.accounts.find(x => x.id === sel); if (!a) return;
-            const b = a.breakdown || a.reasons || [];
+            const b = a.breakdown || a.reasons || [], le = llmEntry(a.id);
             $('#detail').innerHTML = '<p><b>' + esc(a.handle) + '</b> (' + esc(a.platform) + ') ' + pill(a) + '<br><span class="note">' + a.n_posts + ' item' + (a.profile_known ? ', usia akun ' + Math.round(a.ageDays) + ' hari, ' + a.followers + ' pengikut' : ', data profil tidak tersedia dari sumber ini') + '</span></p>' +
                 '<p class="note">Skor ' + (a.score == null ? 0 : a.score) + ' poin; ambang ' + (a.threshold == null ? 2.5 : a.threshold) + '. Persentase dihitung dari selisih poin terhadap ambang, jadi skor rendah berarti belum ada cukup sinyal.</p>' +
                 '<p>' + esc(a.explain || 'Tidak ada penjelasan.') + '</p>' +
+                (le ? '<p class="note">LLM: ' + llmBadge(le) + ' keyakinan ' + pct(le.confidence) + ((le.reasons || []).length ? ' — ' + esc(le.reasons.join(' • ')) : '') + '</p>' : '') +
                 (b.length ? b.map(r => '<div style="' + (r.hit ? '' : 'opacity:.55') + '">' + esc(r.label) + ' — <b>' + r.pts + ' poin</b>' + (r.hit ? '' : ' (tidak aktif)') + '</div><div class="rb"><i style="width:' + Math.min(100, r.pts / 3 * 100) + '%;' + (r.hit ? '' : 'background:var(--mute)') + '"></i></div>').join('') : '<p>Tidak ada sinyal yang menonjol.</p>')
         }
         function graph() {

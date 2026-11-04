@@ -12,6 +12,28 @@ Butuh Python 3.9 atau lebih baru.
 
 Browser terbuka di http://127.0.0.1:8787. Bila port dipakai, `start.py` berhenti dengan peringatan; hentikan instance lama atau pakai `--port 8788`.
 
+## Deploy di server (panel Python project)
+Jangan jalankan `start.py` di server; `start.py` hanya untuk membuat `.venv` dan membuka browser. Gunakan `app:app` langsung dengan ASGI.
+
+- **Project path**: `/www/wwwroot/sentinel` (sesuaikan)
+- **Entry file**: `app.py`
+- **Comm Protocol**: **ASGI** (FastAPI)
+- **Application Name**: `app`
+- **Install dependency path**: `requirements-server.txt`
+- **Startup command** (gunicorn, **1 worker**):
+  ```bash
+  gunicorn app:app -k uvicorn.workers.UvicornWorker -w 1 -b 127.0.0.1:8787 --timeout 300
+  ```
+  Alternatif tanpa gunicorn:
+  ```bash
+  uvicorn app:app --host 127.0.0.1 --port 8787 --workers 1
+  ```
+- **Penting**: gunakan **1 worker/proses**. `JOBS` dan polling job disimpan di memori; beberapa worker membuat `/api/job/{id}` dan `/api/analyze` bisa mendarat di proses berbeda.
+- **Startup user**: `www`; pastikan folder project dan `.cache` bisa ditulis (`chown -R www:www /www/wwwroot/sentinel`).
+- **Environment variables**: isi `MAKERS_MODELS_KEY` lewat panel (atau `.env` dengan `chmod 600`). `app.py` membaca `.env`, tetapi env dari panel diprioritaskan.
+- **Proxy/timeout**: set read timeout Nginx minimal 180–300 detik karena `/api/analyze` bisa menunggu LLM/ASR.
+- **Sistem**: Python 3.11/3.12 disarankan. `ffmpeg` opsional (biasanya dari `imageio-ffmpeg`), Tesseract opsional (RapidOCR fallback).
+
 ## Alur pakai
 1. Tempel tautan postingan publik (TikTok/Instagram/Facebook), klik **1. Ambil konteks video**.
 2. SENTINEL mengambil caption, mengunduh media **sementara**, menjalankan ASR lokal dan OCR (bila tersedia), lalu menampilkan ringkasan, klaim, dan bukti timestamp.
@@ -39,6 +61,7 @@ Pasang: `pip install -r requirements-optional.txt` (otomatis dicoba `start.py`).
 sentinel/
   analysis/   engine, coordination, narrative, evidence
   context/    builder, media, transcribe, ocr
+  llm/        klien EdgeOne Makers + analisis buzzer/bot
   sources/    adapter publik TikTok/Instagram/Facebook
 app.py        FastAPI + job context/analyze
 start.py      pembuat .venv, installer, launcher
@@ -54,12 +77,24 @@ tests/        uji regresi dan integrasi
 5. `sentinel/analysis/engine.py` menyusun skor yang bisa dijelaskan. Skor tinggi hanya jika ada clique; teks mirip tanpa clique hanya memberi poin kecil. `sentinel/analysis/evidence.py` membuat dossier bukti.
 6. `sentinel/context/media.py`, `transcribe.py`, dan `ocr.py` menangani unduhan sementara, ASR lokal, dan OCR.
 7. UI menampilkan konteks lebih dulu, meminta konfirmasi, lalu menampilkan analisis komentar. Setiap label menyertakan alasan dan contoh.
+8. Bila `MAKERS_MODELS_KEY` diisi, `sentinel/llm/advanced.py` mengirim ringkasan sinyal + contoh komentar ke EdgeOne Makers untuk memberi indikasi buzzer/bot per akun. Hasilnya terpisah dari skor heuristik dan tidak menimpa label.
+
+## Analisis lanjutan LLM (opsional)
+SENTINEL bisa memakai **EdgeOne Makers Models** (endpoint OpenAI-compatible) untuk menilai akun mana yang indikatif **buzzer**, **bot**, **organic**, atau **tidak jelas**. LLM hanya menganalisis sinyal yang sudah dihitung (clique, risiko, duplikasi, contoh komentar); label heuristik tetap dipakai dan LLM tidak menimpa keputusan secara diam-diam.
+
+1. Buat API Key di [Makers Console](https://console.tencentcloud.com/edgeone/makers?tab=models&subTab=apikey).
+2. Isi `.env`: `MAKERS_MODELS_KEY=...` (jangan di-commit).
+3. Opsional: `LLM_MODEL` (default `@makers/deepseek-v4-flash`), `LLM_BASE_URL`, `LLM_TIMEOUT`, `LLM_MAX_TOKENS` (default 6144), `LLM_MAX_ACCOUNTS`, `LLM_MAX_SAMPLES`.
+4. Set `LLM_ENABLED=0` untuk mematikan. Bila kunci kosong, analisis LLM dilewati.
+5. `LLM_DISABLE_THINKING=1` (default) mematikan reasoning model agar token tidak habis sebelum JSON selesai. Set `0` bila ingin memakai reasoning penuh.
+
+Hasil LLM muncul di bagian **Analisis lanjutan (LLM)** pada dashboard, kolom tabel akun, detail akun, `/api/health`, dan dossier. Ini indikasi probabilistik, bukan tuduhan atau bukti pembayaran. Saat LLM aktif, ringkasan konteks dan contoh komentar publik (termasuk handle) dikirim ke EdgeOne; aktifkan hanya bila sesuai kebijakan privasi Anda.
 
 ## Konfigurasi `.env`
-`PUBLIC_MAX_COMMENTS`, `PUBLIC_ASR`, `PUBLIC_OCR`, `PUBLIC_MAX_MEDIA_SEC`, `PUBLIC_MAX_MEDIA_MB`, `WHISPER_MODEL`, `WHISPER_LANGUAGE`, `OCR_FPS`, `OCR_MAX_FRAMES`, `OCR_LANG`, `TESSERACT_CMD`, `IG_*`.
+`PUBLIC_MAX_COMMENTS`, `PUBLIC_ASR`, `PUBLIC_OCR`, `PUBLIC_MAX_MEDIA_SEC`, `PUBLIC_MAX_MEDIA_MB`, `WHISPER_MODEL`, `WHISPER_LANGUAGE`, `OCR_FPS`, `OCR_MAX_FRAMES`, `OCR_LANG`, `TESSERACT_CMD`, `IG_*`, `MAKERS_MODELS_KEY`, `LLM_*`.
 
 ## Uji
-`python tests/test_public.py` menguji deteksi platform, normalisasi, konteks caption, stance, clique vs rantai transitif, dan integrasi engine. Atau `python start.py --test`.
+`python tests/test_public.py` menguji deteksi platform, normalisasi, konteks caption, stance, clique vs rantai transitif, dan integrasi engine. `python tests/test_llm.py` menguji parsing JSON, payload, dan integrasi LLM tanpa jaringan. Atau `python start.py --test`.
 
 ## Catatan
 - Ini **bukan** API resmi dan bukan pencarian kata kunci; hanya analisis satu postingan publik lewat tautan.

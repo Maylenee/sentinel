@@ -43,6 +43,8 @@ from sentinel.context import builder as context_mod
 from sentinel.context import media as media_mod
 from sentinel.context import ocr as ocr_mod
 from sentinel.context import transcribe as asr_mod
+from sentinel.llm import advanced as llm_mod
+from sentinel.llm import makers as llm_client
 from sentinel.sources import public as sources_public
 
 app = FastAPI(title='SENTINEL')
@@ -107,6 +109,26 @@ def _cache_write(url, media, data):
         pass
 
 
+async def _llm_review(items, result, context):
+    """Jalankan analisis LLM tanpa menggagalkan analisis heuristik."""
+    cfg = dict(os.environ)
+    try:
+        timeout = max(5.0, float(cfg.get('LLM_TOTAL_TIMEOUT') or 90))
+    except (TypeError, ValueError):
+        timeout = 90.0
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(llm_mod.analyze, items, result, context, cfg), timeout=timeout)
+    except asyncio.TimeoutError:
+        return {'available': True, 'provider': 'edgeone-makers', 'model': llm_client.model(cfg),
+                'error': 'timeout', 'accounts': [],
+                'note': 'Analisis LLM melebihi batas waktu; hasil heuristik tetap dapat digunakan.'}
+    except Exception as e:
+        return {'available': True, 'provider': 'edgeone-makers', 'model': llm_client.model(cfg),
+                'error': e.__class__.__name__, 'accounts': [],
+                'note': 'Analisis LLM gagal; hasil heuristik tetap dapat digunakan.'}
+
+
 async def _context_task(job_id, url, use_media):
     try:
         _job(job_id, status='fetching', progress=3, message='Mengambil postingan dan komentar')
@@ -146,7 +168,11 @@ def health():
     except Exception:
         ff = False
     return {'ok': True, 'public_sources': sources_public.available(),
-            'context': {'asr': asr_mod.available(), 'ocr': ocr_mod.available(), 'ffmpeg': ff}}
+            'context': {'asr': asr_mod.available(), 'ocr': ocr_mod.available(), 'ffmpeg': ff},
+            'llm': {'enabled': llm_client.enabled(os.environ), 'available': llm_client.available(os.environ),
+                    'provider': 'edgeone-makers', 'model': llm_client.model(os.environ),
+                    'max_tokens': llm_client.max_tokens(os.environ),
+                    'thinking_disabled': llm_client.thinking_disabled(os.environ)}}
 
 
 @app.post('/api/context')
@@ -194,6 +220,7 @@ async def analyze_job(req: AnalyzeReq):
     out['sources'] = {meta.get('platform') or 'sumber': len(items)}
     out['errors'] = {}
     out['query'] = j.get('url') or meta.get('url') or ''
+    out['llm'] = await _llm_review(items, out, ctx)
     out['dossier'] = evidence.build(out['query'], meta, ctx, out)
     return out
 
@@ -219,6 +246,7 @@ async def analyze_post(req: PostReq):
     out['sources'] = {meta['platform']: len(items)}
     out['errors'] = {}
     out['query'] = url
+    out['llm'] = await _llm_review(items, out, ctx)
     out['dossier'] = evidence.build(url, meta, ctx, out)
     return out
 
