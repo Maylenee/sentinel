@@ -838,7 +838,8 @@
         const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), COL = l => cssv({ tinggi: '--hi', sedang: '--mid', rendah: '--lo' }[l]);
         const sleep = ms => new Promise(r => setTimeout(r, ms));
         let jobId = null, ctx = null, post = null, res = null, sel = null, pos = new Map();
-        async function api(path, opt) { const r = await fetch(path, opt); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || ('status ' + r.status)); return d }
+        const API_BASE = String(window.SENTINEL_API_BASE || '').replace(/\/$/, '');
+        async function api(path, opt) { const r = await fetch(API_BASE + path, opt); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || ('status ' + r.status)); return d }
         const pill = a => '<span class="pill ' + a.level + '">' + Math.round(a.risk * 100) + '% ' + a.level + '</span>';
         const fmtDur = s => { if (s == null) return '?'; s = Math.round(Number(s)); return Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's' };
         const pct = x => Math.round((Number(x) || 0) * 100) + '%';
@@ -899,12 +900,12 @@
                 const d = await api('/api/context', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, media: $('#pmedia').checked }) }); jobId = d.job_id;
                 const t0 = Date.now();
                 while (Date.now() - t0 < 360000) {
-                    await sleep(1200); const j = await api('/api/job/' + jobId); setProgress(j.progress, j.message || '');
+                    await sleep(1200); const j = await api('/api/job?id=' + encodeURIComponent(jobId)); setProgress(j.progress, j.message || '');
                     if (j.status === 'error') throw new Error(j.error || 'Job gagal');
                     if (j.status === 'done') { setProgress(100, 'Konteks siap'); renderContext(j); return }
                 }
                 throw new Error('Waktu habis. Coba kecilkan PUBLIC_MAX_COMMENTS atau matikan ASR/OCR.')
-            } catch (e) { $('#errs').innerHTML = '<div class="err">Gagal: ' + esc(e.message === 'Failed to fetch' ? 'Server tidak merespons. Pastikan <b>python start.py</b> masih berjalan.' : e.message) + '</div>'; setProgress(null); setStep(1) }
+            } catch (e) { $('#errs').innerHTML = '<div class="err">Gagal: ' + esc(e.message === 'Failed to fetch' ? 'Backend tidak merespons. Periksa <b>SENTINEL_API_URL</b> di EdgeOne dan service backend di VPS.' : e.message) + '</div>'; setProgress(null); setStep(1) }
             finally { $('#pgo').disabled = false }
         }
         async function analyzeComments() {
@@ -965,7 +966,7 @@
         $('#g').addEventListener('click', e => { if (!res) return; const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; let b = null, d = 100; for (const [id, [px, py]] of pos) { const dd = (px - x) ** 2 + (py - y) ** 2; if (dd < d) { d = dd; b = id } } if (b) pick(b) });
         $('#pgo').onclick = getContext; $('#canalyze').onclick = analyzeComments; $('#purl').addEventListener('keydown', e => { if (e.key === 'Enter') getContext() });
         addEventListener('resize', () => res && graph());
-        if (location.protocol === 'file:') { $('#errs').innerHTML = '<div class="err">Halaman dibuka sebagai file. Jalankan <b>python start.py</b>, lalu buka http://127.0.0.1:8787.</div>' }
+        if (location.protocol === 'file:') { $('#errs').innerHTML = '<div class="err">Halaman dibuka sebagai file. Jalankan <b>python backend/start.py</b> dari root repo, lalu buka http://127.0.0.1:8787.</div>' }
     </script>
 </body>
 

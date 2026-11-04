@@ -12,6 +12,8 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
 VENV = ROOT / '.venv'
+if not VENV.exists() and (ROOT.parent / '.venv').exists():
+    VENV = ROOT.parent / '.venv'
 MARKER = 'SENTINEL_VENV'
 
 

@@ -32,8 +32,9 @@ _load_env()
 
 try:
     import uvicorn
-    from fastapi import FastAPI, HTTPException
-    from fastapi.responses import FileResponse
+    from fastapi import FastAPI, HTTPException, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import FileResponse, JSONResponse
     from pydantic import BaseModel
 except ImportError:
     raise SystemExit('Pustaka belum terpasang. Jalankan dulu:  pip install -r requirements.txt')
@@ -48,6 +49,32 @@ from sentinel.llm import makers as llm_client
 from sentinel.sources import public as sources_public
 
 app = FastAPI(title='SENTINEL')
+
+_FRONTEND = ROOT.parent / 'frontend' / 'index.html'
+_API_TOKEN = os.environ.get('SENTINEL_API_TOKEN', '').strip()
+_cors_origins = [x.strip() for x in os.environ.get('CORS_ORIGINS', '').split(',') if x.strip()]
+_cors_regex = os.environ.get('CORS_ORIGIN_REGEX', '').strip() or None
+
+if _cors_origins or _cors_regex:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_origin_regex=_cors_regex,
+        allow_methods=['*'],
+        allow_headers=['*'],
+        allow_credentials=False,
+    )
+
+
+@app.middleware('http')
+async def _api_guard(request: Request, call_next):
+    path = request.url.path
+    if _API_TOKEN and path.startswith('/api/') and path != '/api/health' and request.method != 'OPTIONS':
+        auth = request.headers.get('authorization', '')
+        if not secrets.compare_digest(auth, f'Bearer {_API_TOKEN}'):
+            return JSONResponse({'detail': 'Unauthorized'}, status_code=401)
+    return await call_next(request)
+
 
 JOBS = {}
 TASKS = set()
@@ -158,7 +185,9 @@ async def _context_task(job_id, url, use_media):
 
 @app.get('/')
 def index():
-    return FileResponse(ROOT / 'static' / 'index.html')
+    if _FRONTEND.exists():
+        return FileResponse(_FRONTEND)
+    return {'ok': True, 'service': 'SENTINEL API', 'health': '/api/health'}
 
 
 @app.get('/api/health')
