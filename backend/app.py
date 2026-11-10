@@ -218,6 +218,11 @@ async def make_context(req: ContextReq):
     return {'job_id': job_id}
 
 
+@app.get('/api/job')
+def get_job_query(id: str):
+    return get_job(id)
+
+
 @app.get('/api/job/{job_id}')
 def get_job(job_id: str):
     _cleanup_jobs()
