@@ -7,6 +7,7 @@ Facebook tidak didukung (facebook-scraper terlalu berat untuk serverless). Patuh
 gunakan untuk riset/kajian, bukan untuk membuka data privat.
 """
 import asyncio
+import html
 import re
 import time
 from datetime import timezone
@@ -194,6 +195,60 @@ def _tiktok_comments(page_url, cookies, aweme_id, maxc, deadline=None):
     return out[:maxc], ''
 
 
+def _tt_id(url):
+    m = re.search(r'/(?:video|photo)/(\d+)', url or '')
+    return m.group(1) if m else ''
+
+
+def _tt_canon(url):
+    """Ubah /photo/ID menjadi /video/ID: yt-dlp dan oEmbed hanya mengenali bentuk /video/."""
+    vid = _tt_id(url)
+    m = re.search(r'tiktok\.com/(@[^/?#]+)', url or '')
+    if vid and m:
+        return f'https://www.tiktok.com/{m.group(1)}/video/{vid}'
+    return url
+
+
+def _tiktok_direct(url, cfg):
+    """Jalur tanpa yt-dlp (postingan foto/slideshow): caption dari halaman, komentar dari API web."""
+    vid = _tt_id(url)
+    if not vid:
+        raise SourceError('ID postingan TikTok tidak ditemukan di tautan')
+    maxc = max(0, int(cfg.get('PUBLIC_MAX_COMMENTS') or 200))
+    deadline = time.time() + 40
+    canon = _tt_canon(url)
+    m = re.search(r'tiktok\.com/@([^/?#]+)', url)
+    author = m.group(1) if m else 'tiktok'
+    cookies, caption = {}, ''
+    try:
+        with httpx.Client(follow_redirects=True, timeout=15, headers={'user-agent': _UA}) as c:
+            r = c.get(canon)
+            cookies = dict(c.cookies)
+            if r.status_code == 200:
+                mm = (re.search(r'<meta[^>]+property="og:description"[^>]+content="([^"]*)"', r.text)
+                      or re.search(r'<meta[^>]+content="([^"]*)"[^>]+property="og:description"', r.text))
+                caption = html.unescape(mm.group(1)) if mm else ''
+    except httpx.HTTPError:
+        pass
+    thumb = ''
+    try:  # thumbnail untuk pratinjau (opsional)
+        o = httpx.get('https://www.tiktok.com/oembed', params={'url': canon}, timeout=8, follow_redirects=True)
+        if o.status_code == 200:
+            thumb = o.json().get('thumbnail_url') or ''
+    except Exception:
+        pass
+    raw, note = _tiktok_comments(canon, cookies, vid, maxc, deadline)
+    comments = [x for x in (_tt_comment(c) for c in raw) if x]
+    if not comments and not caption:
+        raise SourceError('TikTok tidak mengembalikan caption maupun komentar' + (' (' + note + ')' if note else ''))
+    info = {'id': vid, 'webpage_url': canon, 'uploader': author, 'description': caption, 'thumbnail': thumb,
+            'comments': comments, 'timestamp': int(vid) >> 32}  # ID TikTok memuat waktu unggah
+    meta = _tiktok_meta(info, url)
+    if note:
+        meta['note'] = note
+    return meta, _tiktok_items(info, url)
+
+
 def _tiktok_fetch(url, cfg):
     try:
         import yt_dlp
@@ -205,10 +260,10 @@ def _tiktok_fetch(url, cfg):
     deadline = time.time() + 45
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False) or {}
+            info = ydl.extract_info(_tt_canon(url), download=False) or {}
             cookies = {c.name: c.value for c in ydl.cookiejar}
     except Exception as e:
-        raise SourceError('TikTok gagal diambil (post privat/dihapus/limit): ' + _clean_err(e))
+        raise SourceError('post privat/dihapus/limit atau URL tidak didukung yt-dlp - ' + _clean_err(e))
     note = ''
     if maxc and not info.get('comments'):
         raw, note = _tiktok_comments(info.get('webpage_url') or url, cookies, info.get('id'), maxc, deadline)
@@ -224,7 +279,7 @@ def _tiktok_fetch(url, cfg):
 async def _tiktok_oembed(url):
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=20) as c:
-            r = await c.get('https://www.tiktok.com/oembed', params={'url': url})
+            r = await c.get('https://www.tiktok.com/oembed', params={'url': _tt_canon(url)})
     except httpx.HTTPError as e:
         raise SourceError('TikTok tidak bisa dihubungi: ' + e.__class__.__name__)
     if r.status_code != 200:
@@ -341,7 +396,28 @@ def _facebook_fetch(url, cfg):
                       'berat dan sesi login yang tidak muat di serverless. Gunakan tautan TikTok atau Instagram.')
 
 
+async def _ensure_thumb(meta, url):
+    """Lengkapi thumbnail TikTok lewat oEmbed bila belum ada (best effort, maks 8 dtk)."""
+    pv = meta.setdefault('preview', {})
+    if pv.get('thumbnail'):
+        return
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=8) as c:
+            r = await c.get('https://www.tiktok.com/oembed', params={'url': _tt_canon(url)})
+        if r.status_code == 200:
+            pv['thumbnail'] = r.json().get('thumbnail_url') or ''
+    except Exception:
+        pass
+
+
 async def fetch_public_post(url, cfg=None):
+    meta, items = await _fetch_public_post(url, cfg)
+    if meta.get('platform') == 'TikTok':
+        await _ensure_thumb(meta, url)
+    return meta, items
+
+
+async def _fetch_public_post(url, cfg=None):
     """Kembalikan (meta, items) siap masuk engine.analyze_items().
 
     Melempar SourceError bila platform tidak didukung atau data publik tidak bisa diambil.
@@ -350,16 +426,20 @@ async def fetch_public_post(url, cfg=None):
     cfg = cfg or {}
     platform = detect(url)
     if platform == 'tiktok':
-        try:
-            return await asyncio.wait_for(asyncio.to_thread(_tiktok_fetch, url, cfg), 60)
-        except (_NoLib, SourceError, asyncio.TimeoutError) as e:
-            reason = 'melebihi batas waktu' if isinstance(e, asyncio.TimeoutError) else str(e)
+        reasons = []
+        for name, fn, limit in (('yt-dlp', _tiktok_fetch, 50), ('langsung', _tiktok_direct, 45)):
             try:
-                meta, items = await _tiktok_oembed(url)
-            except SourceError:
-                raise SourceError('TikTok gagal diambil: ' + reason)
-            meta['note'] = ('Komentar tidak tersedia (' + reason + ').')[:300]
-            return meta, items
+                return await asyncio.wait_for(asyncio.to_thread(fn, url, cfg), limit)
+            except asyncio.TimeoutError:
+                reasons.append(f'{name}: melebihi batas waktu')
+            except (_NoLib, SourceError) as e:
+                reasons.append(f'{name}: {e}')
+        try:
+            meta, items = await _tiktok_oembed(url)
+        except SourceError as e:
+            raise SourceError('TikTok gagal diambil. ' + ' | '.join(reasons + [f'oEmbed: {e}'])[:600])
+        meta['note'] = ('Komentar tidak tersedia. ' + ' | '.join(reasons))[:300]
+        return meta, items
     if platform == 'instagram':
         try:
             return await asyncio.wait_for(asyncio.to_thread(_instagram_fetch, url, cfg), 80)

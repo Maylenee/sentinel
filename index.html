@@ -732,6 +732,10 @@
                                     aria-label="Ringkasan konteks yang dapat diedit"></textarea>
                                 <h3>Bukti konteks</h3>
                                 <details>
+                                    <summary>Transkrip audio</summary>
+                                    <div class="ev" id="ctrans"></div>
+                                </details>
+                                <details>
                                     <summary>Caption / deskripsi</summary>
                                     <div class="ev" id="ccap"></div>
                                 </details>
@@ -848,12 +852,14 @@
         const cards = rows => rows.map(([l, v]) => '<div><b>' + v + '</b><span>' + l + '</span></div>').join('');
         function setProgress(p, m) { const bar = $('#pbar'), fill = $('#pfill'); if (p == null) { bar.hidden = true; return } bar.hidden = false; fill.style.width = Math.max(0, Math.min(100, Number(p) || 0)) + '%'; if (m) $('#pst').textContent = m }
         function media() {
-            const p = post || {}, pv = previewOf(p), box = $('#cmedia'); let h = '';
-            if (pv.embed_url) { h = '<iframe src="' + esc(pv.embed_url) + '" loading="lazy" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen title="Pratinjau ' + esc(p.platform || 'postingan') + '"></iframe>' }
-            else if (pv.thumbnail) { h = '<a href="' + esc(p.url) + '" target="_blank" rel="noopener"><img src="' + esc(pv.thumbnail) + '" alt="Pratinjau postingan" referrerpolicy="no-referrer"></a>' }
-            else { h = '<div class="fallback">Pratinjau media tidak tersedia dari platform ini.</div>' }
-            if (p.url) h += '<a class="open" href="' + esc(p.url) + '" target="_blank" rel="noopener">Buka postingan di ' + esc(p.platform || 'platform') + ' ↗</a>';
-            box.innerHTML = h
+            const p = post || {}, pv = previewOf(p), box = $('#cmedia');
+            const isPhoto = /\/photo\//.test(p.url || '');
+            if (isPhoto) delete pv.embed_url; // pemutar TikTok tidak mendukung postingan foto
+            const link = p.url ? '<a class="open" href="' + esc(p.url) + '" target="_blank" rel="noopener">Buka postingan di ' + esc(p.platform || 'platform') + ' ↗</a>' : '';
+            if (p.platform === 'TikTok') delete pv.embed_url; // pemutar TikTok sering menampilkan "Server error / Retry"; pakai thumbnail saja
+            const frame = pv.embed_url ? '<iframe src="' + esc(pv.embed_url) + '" loading="lazy" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen title="Pratinjau ' + esc(p.platform || 'postingan') + '"></iframe>' : '';
+            const img = pv.thumbnail ? '<img src="' + esc(pv.thumbnail) + '" alt="Pratinjau postingan" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<div class=fallback>Thumbnail tidak bisa dimuat.</div>\'">' : '';
+            box.innerHTML = (frame || (img ? '<a href="' + esc(p.url) + '" target="_blank" rel="noopener" title="Buka di TikTok">' + img + '</a>' : '<div class="fallback">Pratinjau media tidak tersedia dari platform ini.</div>')) + link
         }
         function previewOf(p) {
             const pv = Object.assign({}, (p || {}).preview || {}); if (!pv.embed_url && p && p.url) {
@@ -883,11 +889,12 @@
             ctx = j.context || {}; post = j.post || post || {}; items = j.items || items;
             $('#ctxsec').hidden = false; $('#statsec').hidden = true; $('#csec').hidden = true; setStep(2);
             $('#csum').textContent = ctx.summary || 'Tidak ada ringkasan.';
-            $('#cstats').innerHTML = cards([['Durasi', fmtDur(ctx.duration)], ['Keyakinan konteks', pct(ctx.confidence)], ['Komentar diambil', j.items_count == null ? '?' : j.items_count]]);
+            $('#cstats').innerHTML = cards([['Durasi', fmtDur(ctx.duration)], ['Keyakinan konteks', pct(ctx.confidence)], ['Transkrip', ctx.video && ctx.video.transcript ? 'Ada' : 'Tidak'], ['Komentar diambil', j.items_count == null ? '?' : j.items_count]]);
             $('#cnote').textContent = (ctx.data_notes || '');
             $('#cclaims').innerHTML = (ctx.claims || []).length ? ctx.claims.map(claimHtml).join('') : '<p class="note">Tidak ada klaim eksplisit yang terdeteksi. Ringkasan tetap bisa dipakai.</p>';
             $('#cedit').value = ctx.summary || '';
             const ev = ctx.evidence || {};
+            $('#ctrans').innerHTML = (ev.transcript || []).length ? ev.transcript.map(s => '<div>[' + s.start + '–' + s.end + 's] ' + esc(s.text) + '</div>').join('') : '<p class="note">Transkrip tidak tersedia.</p>';
             $('#ccap').textContent = ev.caption || 'Tidak ada caption.';
             media(); $('#ctxsec').scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
@@ -897,9 +904,23 @@
             try {
                 setProgress(35, 'Mengambil postingan dan komentar…');
                 const j = await api('/api/context', { url });
-                setProgress(100, 'Konteks siap'); renderContext(j); return
+                setProgress(100, 'Konteks siap'); renderContext(j);
+                if (j.asr_available) runAsr(url);
+                return
             } catch (e) { $('#errs').innerHTML = '<div class="err">Gagal: ' + esc(e.message === 'Failed to fetch' ? 'Fungsi API tidak merespons. Pastikan folder <b>cloud-functions</b> ikut ter-deploy di EdgeOne.' : e.message) + '</div>'; setProgress(null); setStep(1) }
             finally { $('#pgo').disabled = false }
+        }
+        async function runAsr(url) {
+            const note = $('#cnote'), base = note.textContent;
+            note.textContent = 'Menjalankan transkripsi audio (ASR)… ringkasan akan diperbarui otomatis. ' + base;
+            try {
+                const d = await api('/api/transcribe', { url, post });
+                const untouched = $('#cedit').value.trim() === (ctx.summary || '').trim(); // jangan timpa suntingan pengguna
+                const keep = $('#cedit').value;
+                renderContext({ context: d.context, post, items, items_count: items.length });
+                if (!untouched) $('#cedit').value = keep;
+                $('#ctxsec').scrollIntoView({ block: 'nearest' })
+            } catch (e) { note.textContent = 'Transkripsi audio gagal: ' + e.message + ' — konteks tetap dari caption. ' + base }
         }
         async function analyzeComments() {
             if (!items || !ctx) { return }

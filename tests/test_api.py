@@ -62,3 +62,19 @@ l = client.post('/api/llm', json={'items': j['items'], 'analysis': {'accounts': 
                                   'context': j['context']})
 assert l.status_code == 200 and l.json()['available'] is False  # tanpa kunci: dinonaktifkan dengan sopan
 print('api end-to-end: OK;', len(res['accounts']), 'akun,', len(res['clusters']), 'clique')
+
+# ---- ASR (API Whisper dipalsukan)
+import os  # noqa: E402
+os.environ['ASR_API_KEY'] = 'test'
+assert client.get('/api/health').json()['asr']['available'] is True
+assert client.post('/api/context', json={'url': 'https://www.tiktok.com/@a/video/1'}).json()['asr_available'] is True
+assert client.post('/api/context', json={'url': 'https://www.tiktok.com/@a/photo/1'}).json()['asr_available'] is False
+entry._transcribe_blocking = lambda url, cfg: {'segments': [{'start': 0.0, 'end': 4.2, 'text': 'Pemerintah harus menurunkan harga sekarang juga.'}],
+                                               'language': 'id', 'model': 'whisper-large-v3-turbo'}
+t = client.post('/api/transcribe', json={'url': 'https://www.tiktok.com/@a/video/1', 'post': j['post']})
+assert t.status_code == 200, t.text
+c2 = t.json()['context']
+assert c2['video']['transcript'] is True and c2['evidence']['transcript'] and c2['confidence'] > j['context']['confidence']
+del os.environ['ASR_API_KEY']
+assert client.post('/api/transcribe', json={'url': 'https://www.tiktok.com/@a/video/1'}).status_code == 400
+print('asr endpoint: OK; keyakinan', j['context']['confidence'], '->', c2['confidence'])

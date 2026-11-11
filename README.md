@@ -8,7 +8,7 @@ Semua berjalan di EdgeOne: `index.html` (statis) + `cloud-functions/api/[[defaul
 3. Lokal: `edgeone pages dev`.
 
 ## Alur (semua stateless, tiap request < 120 dtk)
-`POST /api/context` -> `POST /api/analyze` (heuristik) -> `POST /api/llm` (penilaian LLM, request terpisah).
+`POST /api/context` -> `POST /api/transcribe` (ASR opsional) -> `POST /api/analyze` (heuristik) -> `POST /api/llm` (LLM), semua request terpisah.
 
 ## Uji
 `pip install fastapi httpx pytest && python tests/test_api.py && python tests/test_llm.py`

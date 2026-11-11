@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from sentinel.analysis import engine, evidence  # noqa: E402
+from sentinel.context import asr as asr_mod  # noqa: E402
 from sentinel.context import builder as context_mod  # noqa: E402
 from sentinel.llm import advanced as llm_mod  # noqa: E402
 from sentinel.llm import makers as llm_client  # noqa: E402
@@ -33,6 +34,7 @@ from sentinel.sources import public as sources_public  # noqa: E402
 
 MAX_ITEMS = 600  # batas keamanan; body request Cloud Functions maksimal 6 MB
 LLM_BUDGET = 85  # detik; sisakan ruang di bawah 120 dtk
+ASR_BUDGET = 100  # detik; unduh media + transkripsi, di bawah 120 dtk
 ALLOWED_ORIGINS = [x.strip() for x in os.environ.get('ALLOWED_ORIGINS', '').split(',') if x.strip()]
 
 app = FastAPI(title='SENTINEL', docs_url=None, redoc_url=None, openapi_url=None)
@@ -60,6 +62,11 @@ class AnalyzeReq(BaseModel):
     context: Optional[dict] = None
     win: int = 1440
     cluster_span: int = 360
+
+
+class TranscribeReq(BaseModel):
+    url: str
+    post: Optional[dict] = None
 
 
 class LlmReq(BaseModel):
@@ -94,6 +101,7 @@ router = APIRouter()
 @router.get('/health')
 def health():
     return {'ok': True, 'runtime': 'edgeone-cloud-functions',
+            'asr': {'available': asr_mod.available(os.environ), 'model': asr_mod.model(os.environ)},
             'public_sources': sources_public.available(),
             'llm': {'enabled': llm_client.enabled(os.environ), 'available': llm_client.available(os.environ),
                     'provider': 'edgeone-makers', 'model': llm_client.model(os.environ),
@@ -113,7 +121,36 @@ async def make_context(req: ContextReq):
     except Exception as e:
         raise HTTPException(502, 'Gagal mengambil postingan: ' + e.__class__.__name__)
     ctx = context_mod.build_context(meta, _cfg())
-    return {'post': meta, 'items': items, 'items_count': len(items), 'context': ctx}
+    return {'post': meta, 'items': items, 'items_count': len(items), 'context': ctx,
+            'asr_available': asr_mod.available(os.environ) and '/photo/' not in url}
+
+
+def _transcribe_blocking(url, cfg):
+    path, tmp = asr_mod.download(url, cfg)
+    try:
+        return asr_mod.transcribe(path, cfg)
+    finally:
+        asr_mod.cleanup(tmp)
+
+
+@router.post('/transcribe')
+async def transcribe(req: TranscribeReq):
+    """Langkah terpisah (request sendiri): unduh media -> ASR -> bangun ulang konteks."""
+    url = (req.url or '').strip()
+    cfg = _cfg()
+    if not sources_public.detect(url):
+        raise HTTPException(400, 'URL harus tautan publik TikTok atau Instagram')
+    if not asr_mod.available(cfg):
+        raise HTTPException(400, 'ASR belum dikonfigurasi (isi ASR_API_KEY di Environment Variables)')
+    try:
+        tr = await asyncio.wait_for(asyncio.to_thread(_transcribe_blocking, url, cfg), ASR_BUDGET)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, 'Transkripsi melebihi batas waktu; coba video yang lebih pendek')
+    except asr_mod.ASRError as e:
+        raise HTTPException(502, str(e))
+    meta = req.post or {}
+    ctx = context_mod.build_context(meta, cfg, transcript=tr['segments'], asr_info=tr)
+    return {'context': ctx, 'segments': len(tr['segments'])}
 
 
 @router.post('/analyze')

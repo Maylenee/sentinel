@@ -157,7 +157,7 @@ def flags(text):
     return out
 
 
-def build_context(meta, cfg=None, progress=None, use_media=False):
+def build_context(meta, cfg=None, progress=None, use_media=False, transcript=None, asr_info=None):
     """Bangun konteks dari metadata/caption. `use_media` diabaikan: serverless tidak menjalankan ASR/OCR."""
     cfg = cfg or {}
     meta = meta or {}
@@ -174,9 +174,10 @@ def build_context(meta, cfg=None, progress=None, use_media=False):
     kind = preview.get('kind') or meta.get('media_kind') or 'video'
     duration = meta.get('duration')
     notes = []
-    transcript = []
+    transcript = list(transcript or [])
     ocr_lines = []
-    media_state = {'downloaded': False, 'asr': False, 'ocr': False, 'note': ''}
+    media_state = {'downloaded': bool(transcript), 'asr': bool(transcript), 'ocr': False, 'note': '',
+                   'asr_model': (asr_info or {}).get('model', ''), 'asr_language': (asr_info or {}).get('language', '')}
 
     tick(5, 'Menyiapkan konteks')
     if not caption:
@@ -215,7 +216,10 @@ def build_context(meta, cfg=None, progress=None, use_media=False):
     conf = min(0.95, conf)
 
     if kind == 'video':
-        notes.append('Ringkasan hanya dari caption; transkrip audio dan OCR tidak dijalankan di EdgeOne.')
+        if transcript:
+            notes.append('Konteks dari caption + transkrip audio (ASR); OCR teks layar tidak dijalankan di EdgeOne.')
+        else:
+            notes.append('Ringkasan hanya dari caption; transkrip audio belum tersedia dan OCR tidak dijalankan di EdgeOne.')
 
     data_note = ' '.join(dict.fromkeys(notes))
     tick(100, 'Konteks selesai')
