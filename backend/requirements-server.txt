@@ -1,5 +1,0 @@
-# Dependensi untuk deploy di server Linux (panel Python project).
-# Pakai: pip install -r requirements-server.txt
--r requirements.txt
-gunicorn>=21.2
--r requirements-optional.txt

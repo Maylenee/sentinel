@@ -1,0 +1,4 @@
+fastapi>=0.110
+httpx>=0.26
+yt-dlp>=2024.5.27
+instaloader>=4.15
